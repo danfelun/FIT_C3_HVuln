@@ -7,7 +7,7 @@ services:
     network_mode: bridge
 
   nikto:
-    image: sullo/nikto:latest
+    image: secsi/nikto:latest
     container_name: fit-nikto
     volumes:
       - ./resultados:/resultados
@@ -31,6 +31,8 @@ services:
   metasploit:
     image: metasploitframework/metasploit-framework:latest
     container_name: fit-metasploit
+    entrypoint: ["/bin/sh"]
+    command: ["-c", "sleep infinity"]
     stdin_open: true
     tty: true
     ports:
