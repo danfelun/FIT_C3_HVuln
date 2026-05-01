@@ -30,8 +30,9 @@ Este laboratorio permite a los estudiantes ejecutar un flujo completo de **ident
 ```bash
 git clone https://github.com/danfelun/FIT_C3_HVuln.git
 cd FIT_C3_HVuln
-chmod +x lab.sh
-docker compose up -d
+chmod +x lab.sh setup.sh
+./setup.sh
+./lab.sh
 ```
 
 ---
