@@ -55,7 +55,9 @@ Se almacenan en:
 
 ## ❌ Eliminación del escaneario
 
+```bash
 docker system prune -af --volumes 
+```
 
 ## 🎓 Curso
 
