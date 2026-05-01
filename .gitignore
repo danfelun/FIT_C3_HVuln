@@ -1,0 +1,58 @@
+# =========================
+# 📁 Resultados del laboratorio
+# =========================
+resultados/
+reports/
+*.txt
+*.html
+*.xml
+*.json
+
+# =========================
+# 🐳 Docker
+# =========================
+*.log
+docker-compose.override.yml
+
+# =========================
+# ⚙️ Archivos del sistema
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# 🐧 Linux / permisos
+# =========================
+*.swp
+*.swo
+*~
+
+# =========================
+# 🐍 Python (por si usas scripts)
+# =========================
+__pycache__/
+*.pyc
+
+# =========================
+# 🔐 Variables sensibles
+# =========================
+.env
+
+# =========================
+# 🧪 Archivos temporales
+# =========================
+tmp/
+temp/
+*.tmp
+
+# =========================
+# 📦 Descargas o binarios
+# =========================
+*.zip
+*.tar
+*.tar.gz
+
+# =========================
+# 🛠️ Metasploit (si generas workspace local)
+# =========================
+.msf4/

@@ -1,0 +1,13 @@
+# Uso dentro de msfconsole:
+# setg RHOSTS <IP_OBJETIVO>
+# setg RPORT 80
+# resource /workspace/scripts/http_recon.rc
+
+use auxiliary/scanner/http/http_version
+run
+
+use auxiliary/scanner/http/title
+run
+
+use auxiliary/scanner/http/robots_txt
+run

@@ -1,0 +1,9 @@
+# Uso dentro de msfconsole:
+# setg RHOSTS <IP_OBJETIVO>
+# resource /workspace/scripts/smb_recon.rc
+
+use auxiliary/scanner/smb/smb_version
+run
+
+use auxiliary/scanner/smb/smb_enumshares
+run

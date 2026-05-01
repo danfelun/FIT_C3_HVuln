@@ -1,0 +1,53 @@
+services:
+  nmap:
+    image: instrumentisto/nmap:latest
+    container_name: fit-nmap
+    profiles: ["tools"]
+    volumes:
+      - ./resultados:/resultados
+    network_mode: bridge
+
+  nikto:
+    image: sullo/nikto:latest
+    container_name: fit-nikto
+    profiles: ["tools"]
+    volumes:
+      - ./resultados:/resultados
+    network_mode: bridge
+
+  nuclei:
+    image: projectdiscovery/nuclei:latest
+    container_name: fit-nuclei
+    profiles: ["tools"]
+    volumes:
+      - ./resultados:/resultados
+      - nuclei_data:/root/.config/nuclei
+    network_mode: bridge
+
+  zap:
+    image: zaproxy/zap-stable:latest
+    container_name: fit-zap
+    profiles: ["tools"]
+    volumes:
+      - ./resultados:/zap/wrk/resultados
+    network_mode: bridge
+
+  metasploit:
+    image: metasploitframework/metasploit-framework:latest
+    container_name: fit-metasploit
+    profiles: ["tools"]
+    stdin_open: true
+    tty: true
+    ports:
+      - "4444:4444"
+      - "5555:5555"
+    volumes:
+      - msf_data:/home/msf/.msf4
+      - ./resultados:/workspace/resultados
+      - ./scripts/metasploit:/workspace/scripts
+    working_dir: /workspace
+    network_mode: bridge
+
+volumes:
+  nuclei_data:
+  msf_data:
