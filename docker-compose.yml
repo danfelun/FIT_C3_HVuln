@@ -31,21 +31,23 @@ services:
     network_mode: bridge
 
   metasploit:
-    image: metasploitframework/metasploit-framework:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.metasploit
+    image: fit-metasploit:local
     container_name: fit-metasploit
-    entrypoint: ["/bin/sh"]
-    command: ["-c", "sleep infinity"]
     stdin_open: true
     tty: true
     ports:
       - "4444:4444"
       - "5555:5555"
     volumes:
-      - msf_data:/home/msf/.msf4
+      - msf_data:/root/.msf4
       - ./resultados:/workspace/resultados
       - ./scripts/metasploit:/workspace/scripts
     working_dir: /workspace
     network_mode: bridge
+    command: ["sleep", "infinity"]
 
 volumes:
   nuclei_data:
