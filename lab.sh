@@ -7,6 +7,14 @@ TARGET=""
 TARGET_URL=""
 RUN_DIR=""
 
+if docker ps >/dev/null 2>&1; then
+  DOCKER_CMD="docker"
+elif sudo docker ps >/dev/null 2>&1; then
+  DOCKER_CMD="sudo docker"
+else
+  DOCKER_CMD="docker"
+fi
+
 mkdir -p "$RESULTS_DIR"
 
 banner() {
@@ -28,23 +36,48 @@ check_requirements() {
     echo "[!] Docker no esta instalado o no esta en el PATH."
     exit 1
   fi
-  if ! docker compose version >/dev/null 2>&1; then
+
+  if ! $DOCKER_CMD compose version >/dev/null 2>&1; then
     echo "[!] Docker Compose v2 no esta disponible."
+    exit 1
+  fi
+
+  if ! $DOCKER_CMD ps >/dev/null 2>&1; then
+    echo "[!] No fue posible conectar con el servicio Docker."
+    echo "    Intenta: sudo systemctl start docker"
     exit 1
   fi
 }
 
+fix_permissions() {
+  mkdir -p "$RESULTS_DIR"
+  chmod -R 777 "$RESULTS_DIR" 2>/dev/null || true
+}
+
 normalize_target() {
   local input="$1"
+  input="$(echo "$input" | xargs)"
   TARGET="$input"
+
   if [[ "$input" =~ ^https?:// ]]; then
     TARGET_URL="$input"
     TARGET="${input#http://}"
     TARGET="${TARGET#https://}"
     TARGET="${TARGET%%/*}"
+    TARGET="${TARGET%%:*}"
   else
     TARGET_URL="http://$input"
   fi
+}
+
+create_run_dir() {
+  local stamp
+  stamp="$(date +%Y%m%d_%H%M%S)"
+  RUN_DIR="$RESULTS_DIR/${stamp}_${TARGET//[^a-zA-Z0-9_.-]/_}"
+  mkdir -p "$RUN_DIR"
+  chmod -R 777 "$RUN_DIR" 2>/dev/null || true
+  echo "$TARGET" > "$RUN_DIR/target.txt"
+  echo "$TARGET_URL" > "$RUN_DIR/target_url.txt"
 }
 
 ask_target() {
@@ -53,18 +86,17 @@ ask_target() {
   echo "Ejemplo URL: http://192.168.56.101"
   echo
   read -rp "Objetivo: " input
+
   if [[ -z "$input" ]]; then
     echo "[!] Debes indicar un objetivo."
     pause
     return 1
   fi
+
   normalize_target "$input"
-  local stamp
-  stamp="$(date +%Y%m%d_%H%M%S)"
-  RUN_DIR="$RESULTS_DIR/${stamp}_${TARGET//[^a-zA-Z0-9_.-]/_}"
-  mkdir -p "$RUN_DIR"
-  echo "$TARGET" > "$RUN_DIR/target.txt"
-  echo "$TARGET_URL" > "$RUN_DIR/target_url.txt"
+  create_run_dir
+  fix_permissions
+
   echo "[+] Objetivo definido: $TARGET"
   echo "[+] URL web base: $TARGET_URL"
   echo "[+] Resultados: $RUN_DIR"
@@ -75,13 +107,25 @@ ensure_target() {
   if [[ -z "$TARGET" || -z "$RUN_DIR" ]]; then
     ask_target || return 1
   fi
+
+  mkdir -p "$RUN_DIR"
+  fix_permissions
+}
+
+compose_run() {
+  cd "$BASE_DIR" || exit 1
+  $DOCKER_CMD compose run --rm "$@"
+}
+
+compose_pull() {
+  cd "$BASE_DIR" || exit 1
+  $DOCKER_CMD compose pull
 }
 
 pull_images() {
   banner
   echo "[+] Descargando/actualizando imagenes Docker..."
-  cd "$BASE_DIR" || exit 1
-  docker compose --profile tools pull
+  compose_pull
   pause
 }
 
@@ -89,11 +133,16 @@ run_nmap() {
   ensure_target || return 1
   banner
   echo "[+] Ejecutando Nmap contra $TARGET"
-  local out_rel
-  out_rel="$(basename "$RUN_DIR")/01_nmap_servicios.txt"
-  cd "$BASE_DIR" || exit 1
-  docker compose run --rm nmap -p- -sV -sC -Pn "$TARGET" -oN "/resultados/$out_rel"
-  echo "[+] Reporte generado: resultados/$out_rel"
+  echo "[i] Modo: todos los puertos TCP (-p-), deteccion de versiones (-sV), scripts basicos (-sC), sin ping previo (-Pn)."
+
+  local run_base
+  run_base="$(basename "$RUN_DIR")"
+
+  compose_run nmap \
+    -p- -sV -sC -Pn --open "$TARGET" \
+    -oN "/resultados/$run_base/01_nmap_servicios.txt" || true
+
+  echo "[+] Reporte generado: resultados/$run_base/01_nmap_servicios.txt"
   pause
 }
 
@@ -101,11 +150,22 @@ run_nikto() {
   ensure_target || return 1
   banner
   echo "[+] Ejecutando Nikto contra $TARGET_URL"
-  local out_rel
-  out_rel="$(basename "$RUN_DIR")/02_nikto.txt"
-  cd "$BASE_DIR" || exit 1
-  docker compose run --rm nikto -h "$TARGET_URL" -output "/resultados/$out_rel" || true
-  echo "[+] Reporte generado: resultados/$out_rel"
+
+  local run_base
+  run_base="$(basename "$RUN_DIR")"
+
+  compose_run nikto \
+    -h "$TARGET_URL" \
+    -output "/resultados/$run_base/02_nikto.txt" || true
+
+  if [[ -f "$RUN_DIR/02_nikto.txt" ]]; then
+    echo "[+] Reporte generado: resultados/$run_base/02_nikto.txt"
+  else
+    echo "[!] Nikto finalizo, pero no se encontro el reporte esperado."
+    echo "    Verifica que docker-compose.yml use: ghcr.io/sullo/nikto:latest"
+    echo "    Verifica tambien el volumen: ./resultados:/resultados"
+  fi
+
   pause
 }
 
@@ -113,11 +173,15 @@ run_nuclei() {
   ensure_target || return 1
   banner
   echo "[+] Ejecutando Nuclei contra $TARGET_URL"
-  local out_rel
-  out_rel="$(basename "$RUN_DIR")/03_nuclei.txt"
-  cd "$BASE_DIR" || exit 1
-  docker compose run --rm nuclei -u "$TARGET_URL" -o "/resultados/$out_rel" || true
-  echo "[+] Reporte generado: resultados/$out_rel"
+
+  local run_base
+  run_base="$(basename "$RUN_DIR")"
+
+  compose_run nuclei \
+    -u "$TARGET_URL" \
+    -o "/resultados/$run_base/03_nuclei.txt" || true
+
+  echo "[+] Reporte generado: resultados/$run_base/03_nuclei.txt"
   pause
 }
 
@@ -126,15 +190,19 @@ run_zap() {
   banner
   echo "[+] Ejecutando OWASP ZAP Baseline contra $TARGET_URL"
   echo "[i] ZAP puede retornar codigo 1 o 2 cuando encuentra alertas; no necesariamente es fallo."
-  local run_base html json
+
+  local run_base
   run_base="$(basename "$RUN_DIR")"
-  html="${run_base}/04_zap_baseline.html"
-  json="${run_base}/04_zap_baseline.json"
-  cd "$BASE_DIR" || exit 1
-  docker compose run --rm zap zap-baseline.py -t "$TARGET_URL" -r "resultados/$html" -J "resultados/$json" || true
+
+  compose_run zap \
+    zap-baseline.py \
+    -t "$TARGET_URL" \
+    -r "resultados/$run_base/04_zap_baseline.html" \
+    -J "resultados/$run_base/04_zap_baseline.json" || true
+
   echo "[+] Reportes generados:"
-  echo "    resultados/$html"
-  echo "    resultados/$json"
+  echo "    resultados/$run_base/04_zap_baseline.html"
+  echo "    resultados/$run_base/04_zap_baseline.json"
   pause
 }
 
@@ -152,8 +220,9 @@ open_metasploit() {
   echo "  setg RHOSTS $TARGET"
   echo "  resource /workspace/scripts/smb_recon.rc"
   echo
+
   cd "$BASE_DIR" || exit 1
-  docker compose run --rm metasploit msfconsole
+  $DOCKER_CMD compose run --rm --entrypoint /bin/sh metasploit -lc "msfconsole"
 }
 
 full_scan() {
@@ -161,22 +230,35 @@ full_scan() {
   banner
   echo "[+] Ejecutando flujo completo contra $TARGET"
   echo "[+] Resultados: $RUN_DIR"
-  cd "$BASE_DIR" || exit 1
+  echo
 
   local run_base
   run_base="$(basename "$RUN_DIR")"
 
   echo "[1/4] Nmap"
-  docker compose run --rm nmap -p- -sV -sC -Pn "$TARGET" -oN "/resultados/$run_base/01_nmap_servicios.txt" || true
+  compose_run nmap \
+    -p- -sV -sC -Pn --open "$TARGET" \
+    -oN "/resultados/$run_base/01_nmap_servicios.txt" || true
 
+  echo
   echo "[2/4] Nikto"
-  docker compose run --rm nikto -h "$TARGET_URL" -output "/resultados/$run_base/02_nikto.txt" || true
+  compose_run nikto \
+    -h "$TARGET_URL" \
+    -output "/resultados/$run_base/02_nikto.txt" || true
 
+  echo
   echo "[3/4] Nuclei"
-  docker compose run --rm nuclei -u "$TARGET_URL" -o "/resultados/$run_base/03_nuclei.txt" || true
+  compose_run nuclei \
+    -u "$TARGET_URL" \
+    -o "/resultados/$run_base/03_nuclei.txt" || true
 
+  echo
   echo "[4/4] OWASP ZAP Baseline"
-  docker compose run --rm zap zap-baseline.py -t "$TARGET_URL" -r "resultados/$run_base/04_zap_baseline.html" -J "resultados/$run_base/04_zap_baseline.json" || true
+  compose_run zap \
+    zap-baseline.py \
+    -t "$TARGET_URL" \
+    -r "resultados/$run_base/04_zap_baseline.html" \
+    -J "resultados/$run_base/04_zap_baseline.json" || true
 
   generate_summary
   echo "[+] Flujo completo finalizado."
@@ -185,8 +267,10 @@ full_scan() {
 
 generate_summary() {
   ensure_target || return 1
+
   local summary
   summary="$RUN_DIR/00_resumen.md"
+
   cat > "$summary" <<EOF
 # Resumen de ejecucion
 
@@ -194,7 +278,7 @@ generate_summary() {
 - URL base: $TARGET_URL
 - Fecha: $(date)
 
-## Archivos generados
+## Archivos esperados
 
 - 01_nmap_servicios.txt
 - 02_nikto.txt
@@ -210,6 +294,8 @@ generate_summary() {
 4. Use Metasploit solo para validar en el entorno autorizado de laboratorio.
 5. Documente evidencia, impacto y recomendacion.
 EOF
+
+  chmod 666 "$summary" 2>/dev/null || true
   echo "[+] Resumen generado: $summary"
 }
 
@@ -239,6 +325,7 @@ menu() {
     echo "0) Salir"
     echo
     read -rp "Seleccione una opcion: " opt
+
     case "$opt" in
       1) ask_target ;;
       2) pull_images ;;
@@ -256,10 +343,11 @@ menu() {
 }
 
 check_requirements
+
 if [[ $# -gt 0 ]]; then
   normalize_target "$1"
-  stamp="$(date +%Y%m%d_%H%M%S)"
-  RUN_DIR="$RESULTS_DIR/${stamp}_${TARGET//[^a-zA-Z0-9_.-]/_}"
-  mkdir -p "$RUN_DIR"
+  create_run_dir
+  fix_permissions
 fi
+
 menu
