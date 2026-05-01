@@ -36,10 +36,12 @@ check_requirements() {
     echo "[!] Docker no esta instalado o no esta en el PATH."
     exit 1
   fi
+
   if ! $DOCKER_CMD compose version >/dev/null 2>&1; then
     echo "[!] Docker Compose v2 no esta disponible."
     exit 1
   fi
+
   if ! $DOCKER_CMD ps >/dev/null 2>&1; then
     echo "[!] No fue posible conectar con el servicio Docker."
     echo "    Intenta: sudo systemctl start docker"
@@ -105,6 +107,7 @@ ensure_target() {
   if [[ -z "$TARGET" || -z "$RUN_DIR" ]]; then
     ask_target || return 1
   fi
+
   mkdir -p "$RUN_DIR"
   fix_permissions
 }
@@ -116,7 +119,11 @@ compose_run() {
 
 compose_pull() {
   cd "$BASE_DIR" || exit 1
-  $DOCKER_CMD compose pull
+  echo "[+] Actualizando imagenes publicas..."
+  echo "[i] Metasploit usa imagen local (fit-metasploit:local), por eso no se descarga con pull."
+  echo "[i] Para reconstruir Metasploit, ejecuta: ./setup.sh"
+  echo
+  $DOCKER_CMD compose pull nmap nikto nuclei zap
 }
 
 pull_images() {
@@ -208,6 +215,22 @@ run_nmap() {
   pause
 }
 
+run_nmap_vuln() {
+  ensure_target || return 1
+  banner
+  echo "[+] Ejecutando Nmap --script vuln contra $TARGET"
+
+  local run_base
+  run_base="$(basename "$RUN_DIR")"
+
+  compose_run nmap \
+    -p- --script vuln -Pn "$TARGET" \
+    -oN "/resultados/$run_base/02_nmap_vuln.txt" || true
+
+  echo "[+] Reporte generado: resultados/$run_base/02_nmap_vuln.txt"
+  pause
+}
+
 run_nikto() {
   ensure_target || return 1
   banner
@@ -220,15 +243,16 @@ run_nikto() {
 
   compose_run nikto \
     -h "$TARGET_URL" \
-    -output "/resultados/$run_base/02_nikto.txt" || true
+    -output "/resultados/$run_base/03_nikto.txt" || true
 
-  if [[ -f "$RUN_DIR/02_nikto.txt" ]]; then
-    echo "[+] Reporte generado: resultados/$run_base/02_nikto.txt"
+  if [[ -f "$RUN_DIR/03_nikto.txt" ]]; then
+    echo "[+] Reporte generado: resultados/$run_base/03_nikto.txt"
   else
     echo "[!] Nikto finalizo, pero no se encontro el reporte esperado."
     echo "    Verifica imagen: ghcr.io/sullo/nikto:latest"
     echo "    Verifica volumen: ./resultados:/resultados"
   fi
+
   pause
 }
 
@@ -244,9 +268,9 @@ run_nuclei() {
 
   compose_run nuclei \
     -u "$TARGET_URL" \
-    -o "/resultados/$run_base/03_nuclei.txt" || true
+    -o "/resultados/$run_base/04_nuclei.txt" || true
 
-  echo "[+] Reporte generado: resultados/$run_base/03_nuclei.txt"
+  echo "[+] Reporte generado: resultados/$run_base/04_nuclei.txt"
   pause
 }
 
@@ -264,12 +288,12 @@ run_zap() {
   compose_run zap \
     zap-baseline.py \
     -t "$TARGET_URL" \
-    -r "resultados/$run_base/04_zap_baseline.html" \
-    -J "resultados/$run_base/04_zap_baseline.json" || true
+    -r "resultados/$run_base/05_zap_baseline.html" \
+    -J "resultados/$run_base/05_zap_baseline.json" || true
 
   echo "[+] Reportes generados:"
-  echo "    resultados/$run_base/04_zap_baseline.html"
-  echo "    resultados/$run_base/04_zap_baseline.json"
+  echo "    resultados/$run_base/05_zap_baseline.html"
+  echo "    resultados/$run_base/05_zap_baseline.json"
   pause
 }
 
@@ -302,16 +326,16 @@ full_scan() {
   local run_base
   run_base="$(basename "$RUN_DIR")"
 
-echo "[1/5] Nmap - Descubrimiento de servicios"
-compose_run nmap \
-  -p- -sV -sC -Pn --open "$TARGET" \
-  -oN "/resultados/$run_base/01_nmap_servicios.txt" || true
+  echo "[1/5] Nmap - Descubrimiento de servicios"
+  compose_run nmap \
+    -p- -sV -sC -Pn --open "$TARGET" \
+    -oN "/resultados/$run_base/01_nmap_servicios.txt" || true
 
-echo
-echo "[2/5] Nmap - Scripts de vulnerabilidad"
-compose_run nmap \
-  -p- --script vuln -Pn "$TARGET" \
-  -oN "/resultados/$run_base/02_nmap_vuln.txt" || true
+  echo
+  echo "[2/5] Nmap - Scripts de vulnerabilidad"
+  compose_run nmap \
+    -p- --script vuln -Pn "$TARGET" \
+    -oN "/resultados/$run_base/02_nmap_vuln.txt" || true
 
   echo
   select_web_url
@@ -320,21 +344,21 @@ compose_run nmap \
   echo "[3/5] Nikto"
   compose_run nikto \
     -h "$TARGET_URL" \
-    -output "/resultados/$run_base/02_nikto.txt" || true
+    -output "/resultados/$run_base/03_nikto.txt" || true
 
   echo
   echo "[4/5] Nuclei"
   compose_run nuclei \
     -u "$TARGET_URL" \
-    -o "/resultados/$run_base/03_nuclei.txt" || true
+    -o "/resultados/$run_base/04_nuclei.txt" || true
 
   echo
   echo "[5/5] OWASP ZAP Baseline"
   compose_run zap \
     zap-baseline.py \
     -t "$TARGET_URL" \
-    -r "resultados/$run_base/04_zap_baseline.html" \
-    -J "resultados/$run_base/04_zap_baseline.json" || true
+    -r "resultados/$run_base/05_zap_baseline.html" \
+    -J "resultados/$run_base/05_zap_baseline.json" || true
 
   generate_summary
   echo "[+] Flujo completo finalizado."
@@ -363,10 +387,11 @@ generate_summary() {
 - 05_zap_baseline.html
 - 05_zap_baseline.json
 
-## Interpretación
+## Interpretacion
 
-- El archivo 01_nmap_servicios.txt muestra puertos y versiones
-- El archivo 02_nmap_vuln.txt sugiere vulnerabilidades
+- 01_nmap_servicios.txt muestra puertos abiertos, servicios y versiones.
+- 02_nmap_vuln.txt contiene hallazgos sugeridos por NSE (--script vuln).
+- Los hallazgos deben validarse manualmente antes de considerarse vulnerabilidades reales.
 
 ## Guia de analisis
 
@@ -390,21 +415,6 @@ show_results() {
   pause
 }
 
-run_nmap_vuln() {
-  ensure_target || return 1
-  banner
-  echo "[+] Ejecutando Nmap --script vuln"
-
-  local run_base
-  run_base="$(basename "$RUN_DIR")"
-
-  compose_run nmap \
-    -p- --script vuln -Pn "$TARGET" \
-    -oN "/resultados/$run_base/02_nmap_vuln.txt" || true
-
-  pause
-}
-
 menu() {
   while true; do
     banner
@@ -412,15 +422,15 @@ menu() {
     echo "URL web: ${TARGET_URL:-no definida}"
     echo
     echo "1) Definir/cambiar objetivo"
-    echo "2) Descargar/actualizar imagenes Docker"
+    echo "2) Descargar/actualizar imagenes publicas"
     echo "3) Ejecutar Nmap"
-    echo "4) Ejecutar Nikto"
-    echo "5) Ejecutar Nuclei"
-    echo "6) Ejecutar OWASP ZAP Baseline"
-    echo "7) Abrir Metasploit"
-    echo "8) Ejecutar Full Scan"
-    echo "9) Ver archivos generados"
-    echo "10) Nmap - Solo scripts de vulnerabilidad"
+    echo "4) Ejecutar Nmap --script vuln"
+    echo "5) Ejecutar Nikto"
+    echo "6) Ejecutar Nuclei"
+    echo "7) Ejecutar OWASP ZAP Baseline"
+    echo "8) Abrir Metasploit"
+    echo "9) Ejecutar Full Scan"
+    echo "10) Ver archivos generados"
     echo "0) Salir"
     echo
     read -rp "Seleccione una opcion: " opt
@@ -429,13 +439,13 @@ menu() {
       1) ask_target ;;
       2) pull_images ;;
       3) run_nmap ;;
-      4) run_nikto ;;
-      5) run_nuclei ;;
-      6) run_zap ;;
-      7) open_metasploit ;;
-      8) full_scan ;;
-      9) show_results ;;
-      10) run_nmap_vuln ;;
+      4) run_nmap_vuln ;;
+      5) run_nikto ;;
+      6) run_nuclei ;;
+      7) run_zap ;;
+      8) open_metasploit ;;
+      9) full_scan ;;
+      10) show_results ;;
       0) exit 0 ;;
       *) echo "Opcion invalida"; pause ;;
     esac

@@ -39,7 +39,7 @@ chmod +x lab.sh setup.sh
 ## 🧪 Uso
 
 ```bash
-./lab.sh IP.IP.IP.IP (Máquina objetivo)
+./lab.sh IP (Ejemplo ./lab.sh 192.168.1.1)
 ```
 
 ---
