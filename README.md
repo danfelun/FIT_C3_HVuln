@@ -53,6 +53,10 @@ Se almacenan en:
 
 ---
 
+## ❌ Eliminación del escaneario
+
+docker system prune -af --volumes 
+
 ## 🎓 Curso
 
 Fundamentos de Intrusión y Testing
@@ -61,4 +65,4 @@ Fundamentos de Intrusión y Testing
 
 ## 📜 Licencia
 
-Uso académico
+Solo para uso académico - CIPAS 3 FIT
