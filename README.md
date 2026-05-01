@@ -39,7 +39,7 @@ docker compose up -d
 ## 🧪 Uso
 
 ```bash
-./lab.sh
+./lab.sh IP.IP.IP.IP (Máquina objetivo)
 ```
 
 ---
