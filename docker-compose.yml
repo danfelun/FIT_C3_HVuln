@@ -2,7 +2,6 @@ services:
   nmap:
     image: instrumentisto/nmap:latest
     container_name: fit-nmap
-    profiles: ["tools"]
     volumes:
       - ./resultados:/resultados
     network_mode: bridge
@@ -10,7 +9,6 @@ services:
   nikto:
     image: sullo/nikto:latest
     container_name: fit-nikto
-    profiles: ["tools"]
     volumes:
       - ./resultados:/resultados
     network_mode: bridge
@@ -18,7 +16,6 @@ services:
   nuclei:
     image: projectdiscovery/nuclei:latest
     container_name: fit-nuclei
-    profiles: ["tools"]
     volumes:
       - ./resultados:/resultados
       - nuclei_data:/root/.config/nuclei
@@ -27,7 +24,6 @@ services:
   zap:
     image: zaproxy/zap-stable:latest
     container_name: fit-zap
-    profiles: ["tools"]
     volumes:
       - ./resultados:/zap/wrk/resultados
     network_mode: bridge
@@ -35,7 +31,6 @@ services:
   metasploit:
     image: metasploitframework/metasploit-framework:latest
     container_name: fit-metasploit
-    profiles: ["tools"]
     stdin_open: true
     tty: true
     ports:
