@@ -92,7 +92,7 @@ run_nmap() {
   local out_rel
   out_rel="$(basename "$RUN_DIR")/01_nmap_servicios.txt"
   cd "$BASE_DIR" || exit 1
-  docker compose run --rm nmap -sV -sC -Pn "$TARGET" -oN "/resultados/$out_rel"
+  docker compose run --rm nmap -p- -sV -sC -Pn "$TARGET" -oN "/resultados/$out_rel"
   echo "[+] Reporte generado: resultados/$out_rel"
   pause
 }
@@ -167,7 +167,7 @@ full_scan() {
   run_base="$(basename "$RUN_DIR")"
 
   echo "[1/4] Nmap"
-  docker compose run --rm nmap -sV -sC -Pn "$TARGET" -oN "/resultados/$run_base/01_nmap_servicios.txt" || true
+  docker compose run --rm nmap -p- -sV -sC -Pn "$TARGET" -oN "/resultados/$run_base/01_nmap_servicios.txt" || true
 
   echo "[2/4] Nikto"
   docker compose run --rm nikto -h "$TARGET_URL" -output "/resultados/$run_base/02_nikto.txt" || true

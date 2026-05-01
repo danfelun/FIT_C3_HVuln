@@ -7,7 +7,7 @@ services:
     network_mode: bridge
 
   nikto:
-    image: secsi/nikto:latest
+    image: ghcr.io/sullo/nikto:latest
     container_name: fit-nikto
     volumes:
       - ./resultados:/resultados
