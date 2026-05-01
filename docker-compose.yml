@@ -24,8 +24,10 @@ services:
   zap:
     image: zaproxy/zap-stable:latest
     container_name: fit-zap
+    user: root
     volumes:
       - ./resultados:/zap/wrk/resultados
+    working_dir: /zap/wrk
     network_mode: bridge
 
   metasploit:
