@@ -34,13 +34,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.metasploit
-    image: fit-metasploit:local
+    image: ${FIT_MSF_IMAGE:-fit-metasploit:local}
     container_name: fit-metasploit
     stdin_open: true
     tty: true
     ports:
-      - "4444:4444"
-      - "5555:5555"
+      - "${FIT_MSF_PORT_4444:-127.0.0.1:4444}:4444"
+      - "${FIT_MSF_PORT_5555:-127.0.0.1:5555}:5555"
     volumes:
       - msf_data:/root/.msf4
       - ./resultados:/workspace/resultados
@@ -48,6 +48,7 @@ services:
     working_dir: /workspace
     network_mode: bridge
     command: ["sleep", "infinity"]
+    restart: unless-stopped
 
 volumes:
   nuclei_data:

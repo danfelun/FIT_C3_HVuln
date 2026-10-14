@@ -56,3 +56,7 @@ temp/
 # 🛠️ Metasploit (si generas workspace local)
 # =========================
 .msf4/
+# Agregar estas reglas al .gitignore existente
+.env
+.env.*
+!.env.example

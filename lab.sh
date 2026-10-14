@@ -15,6 +15,23 @@ else
   DOCKER_CMD="docker"
 fi
 
+# Leer parametros de .env de forma segura, sin ejecutar el archivo como shell.
+load_lab_env() {
+  local key value
+  [[ -f "$BASE_DIR/.env" ]] || return 0
+  while IFS='=' read -r key value || [[ -n "$key" ]]; do
+    [[ "$key" =~ ^[[:space:]]*# || -z "$key" ]] && continue
+    value="${value%$'\r'}"
+    case "$key" in
+      FIT_TARGET) DEFAULT_TARGET="$value" ;;
+      FIT_TARGET_URL) DEFAULT_TARGET_URL="$value" ;;
+    esac
+  done < "$BASE_DIR/.env"
+}
+DEFAULT_TARGET=""
+DEFAULT_TARGET_URL=""
+load_lab_env
+
 mkdir -p "$RESULTS_DIR"
 
 banner() {
@@ -51,7 +68,7 @@ check_requirements() {
 
 fix_permissions() {
   mkdir -p "$RESULTS_DIR"
-  chmod -R 777 "$RESULTS_DIR" 2>/dev/null || true
+  # No modificar permisos de reportes historicos.
 }
 
 normalize_target() {
@@ -75,7 +92,7 @@ create_run_dir() {
   stamp="$(date +%Y%m%d_%H%M%S)"
   RUN_DIR="$RESULTS_DIR/${stamp}_${TARGET//[^a-zA-Z0-9_.-]/_}"
   mkdir -p "$RUN_DIR"
-  chmod -R 777 "$RUN_DIR" 2>/dev/null || true
+  chmod u+rwx "$RUN_DIR" 2>/dev/null || true
   echo "$TARGET" > "$RUN_DIR/target.txt"
   echo "$TARGET_URL" > "$RUN_DIR/target_url.txt"
 }
@@ -312,8 +329,24 @@ open_metasploit() {
   echo "  resource /workspace/scripts/smb_recon.rc"
   echo
 
-  cd "$BASE_DIR" || exit 1
-  $DOCKER_CMD exec -it fit-metasploit msfconsole
+  cd "$BASE_DIR" || return 1
+  echo "[+] Verificando servicio Metasploit..."
+  if ! $DOCKER_CMD compose up -d --build metasploit; then
+    echo "[ERROR] No fue posible preparar Metasploit."
+    $DOCKER_CMD compose logs --tail=60 metasploit || true
+    pause
+    return 1
+  fi
+  if ! $DOCKER_CMD compose exec -T metasploit sh -lc 'command -v msfconsole >/dev/null'; then
+    echo "[ERROR] msfconsole no esta instalado en la imagen."
+    pause
+    return 1
+  fi
+  $DOCKER_CMD compose exec metasploit msfconsole || {
+    echo "[ERROR] La consola finalizo con error."
+    pause
+    return 1
+  }
 }
 
 full_scan() {
@@ -403,7 +436,7 @@ generate_summary() {
 6. Documente evidencia, impacto y recomendacion.
 EOF
 
-  chmod 666 "$summary" 2>/dev/null || true
+  chmod u+rw "$summary" 2>/dev/null || true
   echo "[+] Resumen generado: $summary"
 }
 
@@ -457,7 +490,10 @@ check_requirements
 if [[ $# -gt 0 ]]; then
   normalize_target "$1"
   create_run_dir
-  fix_permissions
+elif [[ -n "$DEFAULT_TARGET" ]]; then
+  normalize_target "$DEFAULT_TARGET"
+  [[ -n "$DEFAULT_TARGET_URL" ]] && TARGET_URL="$DEFAULT_TARGET_URL"
+  create_run_dir
 fi
 
 menu
